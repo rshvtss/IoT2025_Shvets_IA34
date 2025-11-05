@@ -26,4 +26,4 @@ while True:
     print("Sending telemetry:", telemetry)
     mqtt_client.publish(client_telemetry_topic, telemetry)
 
-    time.sleep(10)  # 10 хвилин
+    time.sleep(10)
