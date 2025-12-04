@@ -4,63 +4,56 @@ CounterFitConnection.init('127.0.0.1', 5000)
 
 import time
 import json
-import paho.mqtt.client as mqtt
 from counterfit_shims_grove.adc import ADC
 from counterfit_shims_grove.grove_relay import GroveRelay
 
+# Імпорт бібліотек Azure IoT
+from azure.iot.device import IoTHubDeviceClient, Message, MethodResponse
+
 # Налаштування сенсорів
 adc = ADC()
-relay = GroveRelay(110)  # Пін реле
+relay = GroveRelay(110)
 
-# Налаштування MQTT
-id = '6e6d3417-f9e7-4337-9176-b184333de774'
-client_name = id + 'soil_moisture_sensor_client'
-client_telemetry_topic = id + '/telemetry'
-client_command_topic = id + '/commands'
+# рядок підключення до Azure IoT Hub
+connection_string = "HostName=soil-moisture-sensor-ShvetsRoman.azure-devices.net;DeviceId=soil-moisture-sensor;SharedAccessKey=4Ak5fyP0C2dQYfoUEolDh9O8usQVch38lTIYAuqnXTg="
 
 
-def on_message(client, userdata, msg):
-    print(f"Received command on topic {msg.topic}: {msg.payload.decode()}")
-    try:
-        data = json.loads(msg.payload.decode())
+# --- Функція для обробки команд (Direct Methods) ---
+def handle_method_request(request):
+    print("Direct method received - ", request.name)
 
-        if 'relay_on' in data:
-            if data['relay_on']:
-                print("Command: Turning relay ON")
-                relay.on()
-            else:
-                print("Command: Turning relay OFF")
-                relay.off()
+    if request.name == "relay_on":
+        relay.on()
+        print("Relay turned ON")
+    elif request.name == "relay_off":
+        relay.off()
+        print("Relay turned OFF")
 
-    except Exception as e:
-        print(f"Error handling command: {e}")
+    # Відправка звіту в Azure, що команда виконана успішно (HTTP 200)
+    method_response = MethodResponse.create_from_method_request(request, 200)
+    device_client.send_method_response(method_response)
 
 
-# Ініціалізація MQTT клієнта
-mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_name)
-mqtt_client.on_message = on_message
+# --- Ініціалізація клієнта Azure ---
+device_client = IoTHubDeviceClient.create_from_connection_string(connection_string)
 
-print("Connecting to MQTT broker...")
-mqtt_client.connect('test.mosquitto.org')
+# Прив'язка обробника команд до клієнта
+device_client.on_method_request_received = handle_method_request
 
-mqtt_client.loop_start()
-mqtt_client.subscribe(client_command_topic)
-print(f"Subscribed to topic: {client_command_topic}")
+print('Connecting to Azure IoT Hub...')
+device_client.connect()
+print('Connected to Azure!')
 
-print("MQTT connected! Starting sensor loop...")
+# --- Основний цикл ---
 while True:
-    try:
-        soil_moisture = adc.read(109)
-        telemetry = json.dumps({"soil_moisture": soil_moisture})
+    # Зчитування даних з CounterFit
+    soil_moisture = adc.read(109)
 
-        print(f"Sending telemetry: {telemetry}")
-        mqtt_client.publish(client_telemetry_topic, telemetry)
+    # Створення повідомлення для Azure
+    message = Message(json.dumps({'soil_moisture': soil_moisture}))
 
-        time.sleep(10)
+    # Відправка телеметрії
+    device_client.send_message(message)
+    print(f"Sent telemetry to Azure: {message}")
 
-    except KeyboardInterrupt:
-        print("Stopping application...")
-        break
-
-mqtt_client.loop_stop()
-print("Application stopped.")
+    time.sleep(10)
