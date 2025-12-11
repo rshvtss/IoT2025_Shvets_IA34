@@ -8,16 +8,18 @@ from counterfit_shims_grove.adc import ADC
 from counterfit_shims_grove.grove_relay import GroveRelay
 
 # Імпорт бібліотек Azure IoT
-from azure.iot.device import IoTHubDeviceClient, Message, MethodResponse
+from azure.iot.device import IoTHubDeviceClient, Message, MethodResponse, X509
 
 # Налаштування сенсорів
 adc = ADC()
 relay = GroveRelay(110)
 
-# рядок підключення до Azure IoT Hub
-connection_string = "HostName=soil-moisture-sensor-ShvetsRoman.azure-devices.net;DeviceId=soil-moisture-sensor;SharedAccessKey=4Ak5fyP0C2dQYfoUEolDh9O8usQVch38lTIYAuqnXTg="
-
-
+HOST_NAME = "soil-moisture-sensor-ShvetsRoman.azure-devices.net"
+DEVICE_ID = "soil-moisture-sensor-x509-RomanShvets"
+x509 = X509(
+    cert_file="./soil-moisture-sensor-x509-RomanShvets-cert.pem",
+    key_file="./soil-moisture-sensor-x509-RomanShvets-key.pem"
+)
 # --- Функція для обробки команд (Direct Methods) ---
 def handle_method_request(request):
     print("Direct method received - ", request.name)
@@ -35,12 +37,16 @@ def handle_method_request(request):
 
 
 # --- Ініціалізація клієнта Azure ---
-device_client = IoTHubDeviceClient.create_from_connection_string(connection_string)
+device_client = IoTHubDeviceClient.create_from_x509_certificate(
+    x509=x509,
+    hostname=HOST_NAME,
+    device_id=DEVICE_ID
+)
 
 # Прив'язка обробника команд до клієнта
 device_client.on_method_request_received = handle_method_request
 
-print('Connecting to Azure IoT Hub...')
+print('Connecting to Azure IoT Hub using X.509...')
 device_client.connect()
 print('Connected to Azure!')
 
