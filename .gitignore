@@ -46,3 +46,4 @@ __pycache__/
 __blobstorage__
 __queuestorage__
 __azurite_db*__.json
+soil-moisture-sensor-x509-RomanShvets-key.pem
